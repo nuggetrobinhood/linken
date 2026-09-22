@@ -5,7 +5,6 @@ import { RangeBand } from "./RangeBand";
 const STABLES = ["USDG", "USDC", "USDT", "DAI", "USDbC"];
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 
-// Format a value that's expressed in the quote (token1) units.
 function quote(n: number | null, sym: string): string {
   if (n === null) return "—";
   const v = Math.round(n * 100) / 100;
@@ -30,7 +29,6 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
 
   return (
     <div style={{ border: "0.5px solid var(--line2)", borderRadius: 10, overflow: "hidden", marginBottom: 14, background: "var(--ink2)" }}>
-      {/* header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 14px", background: "var(--panel)", borderBottom: "0.5px solid var(--line)", flexWrap: "wrap" }}>
         <div style={{ fontFamily: "var(--m)", fontSize: 14, fontWeight: 600 }}>
           {p.token0Symbol} <span style={{ color: "var(--fg3)" }}>/</span> {p.token1Symbol}
@@ -44,7 +42,6 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
         </span>
       </div>
 
-      {/* net carry — the headline */}
       <div style={{ padding: 14, borderBottom: "0.5px dashed var(--line)" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
           <span style={{ fontSize: 13, color: "var(--fg2)" }}>Net carry</span>
@@ -65,29 +62,34 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
         )}
       </div>
 
-      {/* range health */}
       {p.priceCurrent !== null && (
         <div style={{ padding: 14, borderBottom: "0.5px dashed var(--line)" }}>
           <div style={{ marginBottom: 14 }}>
             <RangeBand lower={p.priceLower} upper={p.priceUpper} current={p.priceCurrent} />
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12.5 }}>
-            <span style={{ color: nearExit ? "var(--warn)" : "var(--fg2)" }}>
-              {nearExit ? "⚠ " : ""}{pct(p.distToUpperPct ?? 0, { sign: true })} to upper
-            </span>
-            <span style={{ color: "var(--fg2)" }}>{pct(p.distToLowerPct ?? 0, { sign: true })} to lower</span>
-          </div>
+          {inRange ? (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12.5 }}>
+              <span style={{ color: nearExit ? "var(--warn)" : "var(--fg2)" }}>
+                {nearExit ? "⚠ " : ""}{pct(p.distToUpperPct ?? 0, { sign: true })} to upper
+              </span>
+              <span style={{ color: "var(--fg2)" }}>{pct(p.distToLowerPct ?? 0, { sign: true })} to lower</span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: "var(--warn)" }}>
+              {p.priceCurrent >= p.priceUpper
+                ? `⚠ Above range — position is 100% ${p.token1Symbol}, earning no fees`
+                : `⚠ Below range — position is 100% ${p.token0Symbol}, earning no fees`}
+            </div>
+          )}
         </div>
       )}
 
-      {/* pool health placeholder */}
       <div style={{ padding: 14, borderBottom: "0.5px dashed var(--line)" }}>
         <div style={{ fontFamily: "var(--m)", fontSize: 10, color: "var(--fg3)", letterSpacing: 1 }}>
           POOL HEALTH <span style={{ color: "var(--warn)", marginLeft: 8 }}>soon</span>
         </div>
       </div>
 
-      {/* actions */}
       <div style={{ display: "flex", gap: 16, padding: "11px 14px", fontSize: 11.5, flexWrap: "wrap", fontFamily: "var(--m)" }}>
         {p.pool && <a href={`${EXPLORER}/address/${p.pool}`} target="_blank" rel="noreferrer" style={{ color: "var(--fg2)" }}>Pool ↗</a>}
         <a href={`${EXPLORER}/token/0x73991a25c818bf1f1128deaab1492d45638de0d3/instance/${p.tokenId}`} target="_blank" rel="noreferrer" style={{ color: "var(--fg2)" }}>Position #{p.tokenId} ↗</a>
