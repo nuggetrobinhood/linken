@@ -1,8 +1,16 @@
+"use client";
+
 import type { EnrichedPosition } from "@/lib/enrich";
 import { pct } from "@/lib/format";
+import { usEquitiesState } from "@/lib/market";
 import { RangeBand } from "./RangeBand";
+import { StressTestLive } from "./StressTestLive";
 
 const STABLES = ["USDG", "USDC", "USDT", "DAI", "USDbC"];
+const CRYPTO = new Set([
+  "WETH", "ETH", "WBTC", "BTC", "USDG", "USDC", "USDT", "DAI", "USDbC",
+  "ARB", "OP", "SOL", "MATIC", "LINK", "UNI", "AAVE", "PEPE",
+]);
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 
 function quote(n: number | null, sym: string): string {
@@ -27,12 +35,18 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
     p.distToLowerPct !== null &&
     (Math.abs(p.distToUpperPct) <= 2 || Math.abs(p.distToLowerPct) <= 2);
 
+  // Market-hours context: a leg outside the known-crypto set is treated as a
+  // tokenized real-world asset, so its underlying market's hours matter.
+  const rwa = !CRYPTO.has(p.token0Symbol) || !CRYPTO.has(p.token1Symbol);
+  const mkt = usEquitiesState();
+
   return (
     <div style={{ border: "0.5px solid var(--line2)", borderRadius: 10, overflow: "hidden", marginBottom: 14, background: "var(--ink2)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 14px", background: "var(--panel)", borderBottom: "0.5px solid var(--line)", flexWrap: "wrap" }}>
         <div style={{ fontFamily: "var(--m)", fontSize: 14, fontWeight: 600 }}>
           {p.token0Symbol} <span style={{ color: "var(--fg3)" }}>/</span> {p.token1Symbol}
           <span style={{ color: "var(--fg3)", fontWeight: 400, marginLeft: 8 }}>· v3 · {(p.fee / 10000).toFixed(2)}%</span>
+          {rwa && <span style={{ marginLeft: 8, fontSize: 10, color: "var(--warn)", border: "0.5px solid rgba(237,186,70,0.4)", padding: "2px 6px", borderRadius: 5 }}>RWA</span>}
         </div>
         <span style={{ fontFamily: "var(--m)", fontSize: 11, letterSpacing: 1, padding: "3px 9px", borderRadius: 6,
           color: inRange ? "var(--pos)" : "var(--warn)",
@@ -57,7 +71,7 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
         </div>
         {!p.historyOk && (
           <div style={{ marginTop: 10, fontSize: 11, color: "var(--warn)" }}>
-            History unavailable for this position — IL and net carry can&apos;t be computed yet.
+            History unavailable — IL and net carry can&apos;t be computed for this position yet.
           </div>
         )}
       </div>
@@ -81,6 +95,24 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
                 : `⚠ Below range — position is 100% ${p.token0Symbol}, earning no fees`}
             </div>
           )}
+          <div style={{ marginTop: 12, fontSize: 11.5, color: rwa && !mkt.isOpen ? "var(--warn)" : "var(--fg3)", display: "flex", alignItems: "center", gap: 7 }}>
+            {rwa ? (
+              mkt.isOpen
+                ? "● Underlying market open — price tracking live"
+                : "⚠ Underlying market closed — gap-risk window before the open"
+            ) : (
+              "● Crypto pair · trades 24/7 · no market-hours gap"
+            )}
+          </div>
+        </div>
+      )}
+
+      {p.priceCurrent !== null && (
+        <div style={{ padding: 14, borderBottom: "0.5px dashed var(--line)" }}>
+          <div style={{ fontFamily: "var(--m)", fontSize: 10, color: "var(--fg3)", letterSpacing: 1, marginBottom: 12 }}>
+            MARKET-HOURS STRESS TEST
+          </div>
+          <StressTestLive p={p} />
         </div>
       )}
 
