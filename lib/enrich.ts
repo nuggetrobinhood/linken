@@ -2,18 +2,18 @@ import { createPublicClient, http, getAddress, formatUnits, type Address } from 
 import { robinhoodChain, RHC_RPC_URL } from "./chain";
 import { UNISWAP_V3, FACTORY_ABI, POOL_ABI } from "./uniswap";
 import { getRawPositions, type RawPosition } from "./parser";
+import { getNetDeposits } from "./history";
 
-// SLICE 2 + 3a: turn raw ticks into price + range status, and read live
-// uncollected fees. Prices are token1-per-token0.
+// SLICE 2 + 3a + 3b: price/range status, live uncollected fees, current position
+// value, and impermanent loss. Every value is expressed in token1 (quote) units
+// so nothing gets mixed across currencies.
 const client = createPublicClient({
   chain: robinhoodChain,
   transport: http(RHC_RPC_URL),
 });
 
-// NonfungiblePositionManager.collect — non-view. We eth_call (simulate) it with
-// max amounts and the owner as sender to read live uncollected fees without
-// actually collecting. collect() pokes the pool first, so this returns fees
-// brought fully up to date.
+// NonfungiblePositionManager.collect, simulated (eth_call) from the owner with
+// max amounts to read live uncollected fees.
 const NFPM_COLLECT_ABI = [
   {
     type: "function",
@@ -49,16 +49,43 @@ export interface EnrichedPosition extends RawPosition {
   priceUpper: number;
   distToUpperPct: number | null;
   distToLowerPct: number | null;
-  // Slice 3a — live uncollected fees
-  fees0: string; // raw token0
-  fees1: string; // raw token1
+  // 3a — live uncollected fees
+  fees0: string;
+  fees1: string;
   fees0Human: number;
   fees1Human: number;
-  feesQuote: number | null; // total fees valued in token1 units (fees1 + fees0*price)
+  feesQuote: number | null; // fees valued in token1 units
+  // 3b — current composition, value, IL (all token1 units where noted)
+  amt0Human: number | null; // current token0 in the position
+  amt1Human: number | null; // current token1 in the position
+  valueQuote: number | null; // position value in token1 units (needs price only)
+  dep0Human: number; // net token0 deposited
+  dep1Human: number; // net token1 deposited
+  ilQuote: number | null; // impermanent loss in token1 units (needs deposit history)
+  historyOk: boolean; // false => getLogs failed, IL not trustworthy
+  netCarryExGasQuote: number | null; // feesQuote + ilQuote (gas still to come)
 }
 
 function tickToPrice(tick: number, dec0: number, dec1: number): number {
   return Math.pow(1.0001, tick) * Math.pow(10, dec0 - dec1);
+}
+
+// Raw token amounts held by a position, from liquidity L and the tick bounds.
+function positionAmounts(L: number, tickCur: number, tickLo: number, tickHi: number) {
+  const sp = Math.pow(1.0001, tickCur / 2);
+  const sa = Math.pow(1.0001, tickLo / 2);
+  const sb = Math.pow(1.0001, tickHi / 2);
+  let a0 = 0;
+  let a1 = 0;
+  if (tickCur < tickLo) {
+    a0 = L * (1 / sa - 1 / sb);
+  } else if (tickCur >= tickHi) {
+    a1 = L * (sb - sa);
+  } else {
+    a0 = L * (1 / sp - 1 / sb);
+    a1 = L * (sp - sa);
+  }
+  return { a0, a1 }; // raw (wei-like) units
 }
 
 const round = (n: number, dp = 2) => Math.round(n * 10 ** dp) / 10 ** dp;
@@ -74,7 +101,13 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
     raw.map(async (p): Promise<EnrichedPosition> => {
       const priceLower = tickToPrice(p.tickLower, p.token0Decimals, p.token1Decimals);
       const priceUpper = tickToPrice(p.tickUpper, p.token0Decimals, p.token1Decimals);
-      const fees = await readFees(nfpm, account, p);
+
+      const [fees, deposits] = await Promise.all([
+        readFees(nfpm, account, p),
+        getNetDeposits(p.tokenId),
+      ]);
+      const dep0Human = Number(deposits.dep0) / 10 ** p.token0Decimals;
+      const dep1Human = Number(deposits.dep1) / 10 ** p.token1Decimals;
 
       const base: EnrichedPosition = {
         ...p,
@@ -88,6 +121,14 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
         distToLowerPct: null,
         ...fees,
         feesQuote: null,
+        amt0Human: null,
+        amt1Human: null,
+        valueQuote: null,
+        dep0Human: round(dep0Human, 6),
+        dep1Human: round(dep1Human, 6),
+        ilQuote: null,
+        historyOk: deposits.ok,
+        netCarryExGasQuote: null,
       };
 
       try {
@@ -109,7 +150,28 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
 
         const currentTick = Number(slot0[1]);
         const priceCurrent = tickToPrice(currentTick, p.token0Decimals, p.token1Decimals);
+
+        // current composition + value (needs only price, not history)
+        const { a0, a1 } = positionAmounts(
+          Number(p.liquidity),
+          currentTick,
+          p.tickLower,
+          p.tickUpper
+        );
+        const amt0Human = a0 / 10 ** p.token0Decimals;
+        const amt1Human = a1 / 10 ** p.token1Decimals;
+        const valueQuote = amt0Human * priceCurrent + amt1Human;
+
+        // IL (needs deposit history). Hold value = what the deposited tokens are
+        // worth now; IL = position value now − hold value (fees excluded).
+        let ilQuote: number | null = null;
+        let netCarryExGasQuote: number | null = null;
         const feesQuote = fees.fees1Human + fees.fees0Human * priceCurrent;
+        if (deposits.ok) {
+          const holdQuote = dep0Human * priceCurrent + dep1Human;
+          ilQuote = valueQuote - holdQuote;
+          netCarryExGasQuote = round(feesQuote + ilQuote, 4);
+        }
 
         return {
           ...base,
@@ -123,6 +185,11 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
           distToUpperPct: round(((priceUpper - priceCurrent) / priceCurrent) * 100, 2),
           distToLowerPct: round(((priceLower - priceCurrent) / priceCurrent) * 100, 2),
           feesQuote: round(feesQuote, 4),
+          amt0Human: round(amt0Human, 6),
+          amt1Human: round(amt1Human, 6),
+          valueQuote: round(valueQuote, 2),
+          ilQuote: ilQuote === null ? null : round(ilQuote, 4),
+          netCarryExGasQuote,
         };
       } catch {
         return base;
@@ -131,7 +198,6 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
   );
 }
 
-// Live uncollected fees via a simulated collect() from the owner.
 async function readFees(
   nfpm: Address,
   account: Address,
