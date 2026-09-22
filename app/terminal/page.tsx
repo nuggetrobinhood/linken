@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { TerminalHeader } from "@/components/TerminalHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -27,6 +27,7 @@ function TerminalInner() {
   const [positions, setPositions] = useState<EnrichedPosition[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   const meta = liveMeta();
 
   useEffect(() => {
@@ -44,16 +45,21 @@ function TerminalInner() {
     return () => {
       cancelled = true;
     };
-  }, [target]);
+  }, [target, reload]);
 
   return (
     <main className="grid-bg" style={{ minHeight: "100vh" }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <TerminalHeader meta={meta} />
         <div style={{ padding: 16 }}>
-          {isPeek && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--m)", fontSize: 12, color: "var(--fg2)", background: "var(--ink2)", border: "0.5px solid var(--line)", borderRadius: 8, padding: "10px 13px", marginBottom: 16 }}>
-              <span style={{ color: "var(--brand)" }}>◉</span> Viewing {shortAddress(peek)} — read-only peek
+          {target && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: "var(--m)", fontSize: 12, color: "var(--fg2)" }}>
+                {isPeek ? <><span style={{ color: "var(--brand)" }}>◉</span> Viewing {shortAddress(peek)} — read-only peek</> : "Your positions"}
+              </span>
+              <button onClick={() => setReload((r) => r + 1)} disabled={loading} style={{ fontFamily: "var(--m)", fontSize: 12, color: "var(--fg2)", background: "transparent", border: "0.5px solid var(--line2)", borderRadius: 7, padding: "6px 12px", cursor: "pointer", opacity: loading ? 0.5 : 1 }}>
+                ↻ {loading ? "Reading…" : "Refresh"}
+              </button>
             </div>
           )}
           {!target ? (
@@ -131,13 +137,25 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "po
 }
 
 function Connect() {
+  const router = useRouter();
+  const [addr, setAddr] = useState("");
+  const peek = () => {
+    if (isAddr(addr.trim())) router.push(`/terminal?wallet=${addr.trim()}`);
+  };
   return (
-    <div style={{ textAlign: "center", padding: "72px 20px", border: "0.5px solid var(--line)", borderRadius: 12, background: "var(--ink2)" }}>
+    <div style={{ textAlign: "center", padding: "60px 20px", border: "0.5px solid var(--line)", borderRadius: 12, background: "var(--ink2)" }}>
       <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>Connect a wallet to begin</div>
       <div style={{ fontSize: 13, color: "var(--fg2)", maxWidth: "42ch", margin: "0 auto 22px", lineHeight: 1.6 }}>
         LINKEN reads your concentrated-liquidity positions on Robinhood Chain and shows the net carry on each. Read-only — it never moves your funds.
       </div>
       <WalletButton />
+      <div style={{ margin: "26px auto 0", maxWidth: 380 }}>
+        <div style={{ fontSize: 12, color: "var(--fg3)", marginBottom: 8 }}>or peek any wallet</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={addr} onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === "Enter" && peek()} placeholder="0x…" spellCheck={false} style={{ flex: 1, background: "var(--ink)", border: "0.5px solid var(--line2)", borderRadius: 8, color: "var(--fg)", fontFamily: "var(--m)", fontSize: 12, padding: "10px 12px" }} />
+          <button onClick={peek} style={{ background: "transparent", border: "0.5px solid var(--line2)", color: "var(--fg)", fontFamily: "var(--m)", fontSize: 12, padding: "10px 16px", borderRadius: 8, cursor: "pointer" }}>Peek</button>
+        </div>
+      </div>
     </div>
   );
 }
