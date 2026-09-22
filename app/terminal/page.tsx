@@ -1,122 +1,140 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { TerminalHeader } from "@/components/TerminalHeader";
 import { EmptyState } from "@/components/EmptyState";
-import { PositionCard } from "@/components/PositionCard";
-import { PortfolioSummaryBar } from "@/components/PortfolioSummaryBar";
+import { PositionCardLive } from "@/components/PositionCardLive";
 import { WalletButton } from "@/components/WalletButton";
 import { getPositions, summarize, liveMeta } from "@/lib/positions";
-import type { Position } from "@/lib/types";
+import { shortAddress } from "@/lib/format";
+import type { EnrichedPosition } from "@/lib/enrich";
 
-export default function TerminalPage() {
+const usd = (n: number) =>
+  (n < 0 ? "-" : "") + "$" + Math.abs(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const isAddr = (a: string | null): a is string => !!a && /^0x[a-fA-F0-9]{40}$/.test(a);
+
+function TerminalInner() {
   const { address, isConnected } = useAccount();
-  const [positions, setPositions] = useState<Position[] | null>(null);
+  const params = useSearchParams();
+  const peek = params.get("wallet");
+  const isPeek = isAddr(peek);
+  const target = isPeek ? peek : isConnected && address ? address : null;
+
+  const [positions, setPositions] = useState<EnrichedPosition[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const meta = liveMeta();
 
   useEffect(() => {
-    if (!isConnected || !address) {
+    if (!target) {
       setPositions(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    // The data seam. Layer 0 resolves to [] -> empty state. Layer 1 fills this.
-    getPositions(address)
-      .then((p) => {
-        if (!cancelled) setPositions(p);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    setError(null);
+    getPositions(target)
+      .then((p) => !cancelled && setPositions(p))
+      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "Failed to load"))
+      .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [address, isConnected]);
+  }, [target]);
 
   return (
     <main className="grid-bg" style={{ minHeight: "100vh" }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <TerminalHeader meta={meta} />
         <div style={{ padding: 16 }}>
-          {!isConnected ? (
-            <Connect />
-          ) : loading || positions === null ? (
-            <Loading />
-          ) : positions.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <Positions positions={positions} />
+          {isPeek && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--m)", fontSize: 12, color: "var(--fg2)", background: "var(--ink2)", border: "0.5px solid var(--line)", borderRadius: 8, padding: "10px 13px", marginBottom: 16 }}>
+              <span style={{ color: "var(--brand)" }}>◉</span> Viewing {shortAddress(peek)} — read-only peek
+            </div>
           )}
+          {!target ? (
+            <Connect />
+          ) : loading || (positions === null && !error) ? (
+            <Info>Reading positions…</Info>
+          ) : error ? (
+            <Info tone="neg">{error}</Info>
+          ) : positions && positions.length === 0 ? (
+            <EmptyState />
+          ) : positions ? (
+            <Positions positions={positions} />
+          ) : null}
         </div>
       </div>
     </main>
   );
 }
 
+export default function TerminalPage() {
+  return (
+    <Suspense fallback={null}>
+      <TerminalInner />
+    </Suspense>
+  );
+}
+
+function Positions({ positions }: { positions: EnrichedPosition[] }) {
+  const s = summarize(positions);
+  return (
+    <div>
+      {s.nearExit > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(237,186,70,0.08)", border: "0.5px solid rgba(237,186,70,0.35)", borderRadius: 9, padding: "12px 14px", marginBottom: 16, fontSize: 12.5 }}>
+          <span style={{ color: "var(--warn)" }}>⚠</span>
+          <span><b>{s.nearExit}</b> position{s.nearExit > 1 ? "s" : ""} near exit (within 2% of a bound).</span>
+        </div>
+      )}
+
+      <div style={{ fontFamily: "var(--m)", fontSize: 11, color: "var(--fg2)", letterSpacing: 1, marginBottom: 10 }}>PORTFOLIO</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 20 }}>
+        <Stat label="Total value" value={usd(s.totalValueQuote)} />
+        <Stat label="Net carry" value={s.netCarryQuote === null ? "—" : usd(s.netCarryQuote)} tone={s.netCarryQuote === null ? undefined : s.netCarryQuote >= 0 ? "pos" : "neg"} />
+        <Stat label="Range utilization" value={`${s.rangeUtilizationPct}%`} />
+        <Stat label="Near exit" value={String(s.nearExit)} tone={s.nearExit > 0 ? "warn" : undefined} />
+      </div>
+
+      <div style={{ fontFamily: "var(--m)", fontSize: 11, color: "var(--fg2)", letterSpacing: 1, marginBottom: 10 }}>
+        ACTIVE POSITIONS ({positions.length})
+      </div>
+      {positions.map((p) => (
+        <PositionCardLive key={p.tokenId} p={p} />
+      ))}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" | "warn" }) {
+  const color = tone === "pos" ? "var(--pos)" : tone === "neg" ? "var(--neg)" : tone === "warn" ? "var(--warn)" : "var(--fg)";
+  return (
+    <div style={{ background: "var(--ink2)", borderRadius: 8, padding: 13 }}>
+      <div style={{ fontSize: 12, color: "var(--fg2)", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontFamily: "var(--m)", fontSize: 20, fontWeight: 500, color }}>{value}</div>
+    </div>
+  );
+}
+
 function Connect() {
   return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "72px 20px",
-        border: "0.5px solid var(--line)",
-        borderRadius: 12,
-        background: "var(--ink2)",
-      }}
-    >
-      <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>
-        Connect a wallet to begin
-      </div>
+    <div style={{ textAlign: "center", padding: "72px 20px", border: "0.5px solid var(--line)", borderRadius: 12, background: "var(--ink2)" }}>
+      <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>Connect a wallet to begin</div>
       <div style={{ fontSize: 13, color: "var(--fg2)", maxWidth: "42ch", margin: "0 auto 22px", lineHeight: 1.6 }}>
-        LINKEN reads your concentrated-liquidity positions on Robinhood Chain and
-        shows the net carry on each. Read-only — it never moves your funds.
+        LINKEN reads your concentrated-liquidity positions on Robinhood Chain and shows the net carry on each. Read-only — it never moves your funds.
       </div>
       <WalletButton />
     </div>
   );
 }
 
-function Loading() {
+function Info({ children, tone }: { children: React.ReactNode; tone?: "neg" }) {
   return (
-    <div style={{ textAlign: "center", padding: "72px 20px", color: "var(--fg3)", fontFamily: "var(--m)", fontSize: 13 }}>
-      Reading positions…
-    </div>
-  );
-}
-
-function Positions({ positions }: { positions: Position[] }) {
-  const summary = summarize(positions);
-  return (
-    <div>
-      <div
-        style={{
-          fontFamily: "var(--m)",
-          fontSize: 11,
-          color: "var(--fg2)",
-          letterSpacing: 1,
-          marginBottom: 10,
-        }}
-      >
-        PORTFOLIO
-      </div>
-      <PortfolioSummaryBar summary={summary} />
-      <div
-        style={{
-          fontFamily: "var(--m)",
-          fontSize: 11,
-          color: "var(--fg2)",
-          letterSpacing: 1,
-          margin: "4px 0 10px",
-        }}
-      >
-        ACTIVE POSITIONS ({positions.length})
-      </div>
-      {positions.map((p) => (
-        <PositionCard key={p.id} position={p} />
-      ))}
+    <div style={{ textAlign: "center", padding: "72px 20px", fontFamily: "var(--m)", fontSize: 13, color: tone === "neg" ? "var(--neg)" : "var(--fg3)" }}>
+      {children}
     </div>
   );
 }
