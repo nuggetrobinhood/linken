@@ -7,6 +7,7 @@ import { TerminalHeader } from "@/components/TerminalHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { PositionCardLive } from "@/components/PositionCardLive";
 import { WalletButton } from "@/components/WalletButton";
+import { SiteFooter } from "@/components/SiteFooter";
 import { getPositions, summarize, liveMeta } from "@/lib/positions";
 import { shortAddress } from "@/lib/format";
 import type { EnrichedPosition } from "@/lib/enrich";
@@ -68,6 +69,7 @@ function TerminalInner() {
           ) : null}
         </div>
       </div>
+      <SiteFooter />
     </main>
   );
 }
@@ -82,12 +84,21 @@ export default function TerminalPage() {
 
 function Positions({ positions }: { positions: EnrichedPosition[] }) {
   const s = summarize(positions);
+  const outOfRange = positions.filter((p) => p.status === "out-of-range").length;
+  const attention = s.nearExit + outOfRange;
+  const banner =
+    outOfRange > 0
+      ? `${outOfRange} position${outOfRange > 1 ? "s" : ""} out of range — not earning fees.`
+      : s.nearExit > 0
+      ? `${s.nearExit} position${s.nearExit > 1 ? "s" : ""} near exit (within 2% of a bound).`
+      : null;
+
   return (
     <div>
-      {s.nearExit > 0 && (
+      {banner && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(237,186,70,0.08)", border: "0.5px solid rgba(237,186,70,0.35)", borderRadius: 9, padding: "12px 14px", marginBottom: 16, fontSize: 12.5 }}>
           <span style={{ color: "var(--warn)" }}>⚠</span>
-          <span><b>{s.nearExit}</b> position{s.nearExit > 1 ? "s" : ""} near exit (within 2% of a bound).</span>
+          <span>{banner}</span>
         </div>
       )}
 
@@ -95,8 +106,8 @@ function Positions({ positions }: { positions: EnrichedPosition[] }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 20 }}>
         <Stat label="Total value" value={usd(s.totalValueQuote)} />
         <Stat label="Net carry" value={s.netCarryQuote === null ? "—" : usd(s.netCarryQuote)} tone={s.netCarryQuote === null ? undefined : s.netCarryQuote >= 0 ? "pos" : "neg"} />
-        <Stat label="Range utilization" value={`${s.rangeUtilizationPct}%`} />
-        <Stat label="Near exit" value={String(s.nearExit)} tone={s.nearExit > 0 ? "warn" : undefined} />
+        <Stat label="In range" value={`${s.rangeUtilizationPct}%`} />
+        <Stat label="Needs attention" value={String(attention)} tone={attention > 0 ? "warn" : undefined} />
       </div>
 
       <div style={{ fontFamily: "var(--m)", fontSize: 11, color: "var(--fg2)", letterSpacing: 1, marginBottom: 10 }}>
