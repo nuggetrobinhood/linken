@@ -189,10 +189,44 @@ export function EmptyState() {
         </a>
       </div>
 
-      <div style={{ textAlign: "center", marginTop: 14 }}>
-        <span style={{ fontSize: 12, color: "var(--fg3)" }}>
-          or peek at another wallet&apos;s positions → <span style={{ color: "var(--fg3)" }}>(soon)</span>
-        </span>
+      <div style={{ margin: "18px auto 0", maxWidth: 380, textAlign: "center" }}>
+        <div style={{ fontSize: 12, color: "var(--fg3)", marginBottom: 8 }}>
+          or peek at another wallet&apos;s positions
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            value={addr}
+            onChange={(e) => setAddr(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && peek()}
+            placeholder="0x…"
+            spellCheck={false}
+            style={{
+              flex: 1,
+              background: "var(--ink)",
+              border: "0.5px solid var(--line2)",
+              borderRadius: 8,
+              color: "var(--fg)",
+              fontFamily: "var(--m)",
+              fontSize: 12,
+              padding: "10px 12px",
+            }}
+          />
+          <button
+            onClick={peek}
+            style={{
+              background: "transparent",
+              border: "0.5px solid var(--line2)",
+              color: "var(--fg)",
+              fontFamily: "var(--m)",
+              fontSize: 12,
+              padding: "10px 16px",
+              borderRadius: 8,
+              cursor: "pointer",
+            }}
+          >
+            Peek
+          </button>
+        </div>
       </div>
     </div>
   );
