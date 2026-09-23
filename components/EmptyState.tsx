@@ -1,15 +1,25 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { DEMO_POSITION } from "@/lib/demo";
 import { usd, pct, exitBand } from "@/lib/format";
 import { RangeBand } from "./RangeBand";
 import { StressTest } from "./StressTest";
+
+const isAddr = (a: string) => /^0x[a-fA-F0-9]{40}$/.test(a);
 
 // Shown when a connected wallet has no active LP positions. Not a dead end: a
 // clear notice, a playable DEMO position so the value is visible before the user
 // has one of their own, a CTA to open a position, and a peek-another-wallet link.
 export function EmptyState() {
   const d = DEMO_POSITION;
+  const router = useRouter();
+  const [addr, setAddr] = useState("");
+  const peek = () => {
+    if (isAddr(addr.trim())) router.push(`/terminal?wallet=${addr.trim()}`);
+  };
+
   return (
     <div>
       <div
@@ -170,7 +180,7 @@ export function EmptyState() {
             Open an LP on a Robinhood Chain DEX, then come back to watch it.
           </div>
         </div>
-        <a
+        
           href="https://app.uniswap.org"
           target="_blank"
           rel="noreferrer"
