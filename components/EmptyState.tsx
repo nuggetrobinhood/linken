@@ -17,7 +17,7 @@ export function EmptyState() {
   const router = useRouter();
   const [addr, setAddr] = useState("");
   const peek = () => {
-    if (isAddr(addr.trim())) router.push(`/terminal?wallet=${addr.trim()}`);
+    if (isAddr(addr.trim())) router.push("/terminal?wallet=" + addr.trim());
   };
 
   return (
