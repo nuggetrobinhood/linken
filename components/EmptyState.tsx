@@ -181,7 +181,7 @@ export function EmptyState() {
           </div>
         </div>
         
-          href="https://app.uniswap.org"
+        <a href="https://app.uniswap.org"
           target="_blank"
           rel="noreferrer"
           style={{
