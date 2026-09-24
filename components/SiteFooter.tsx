@@ -8,7 +8,7 @@ export function SiteFooter() {
           <span style={{ letterSpacing: 2, color: "var(--fg)", fontWeight: 600 }}>LINKEN</span>
           <span style={{ display: "flex", gap: 18 }}>
             <Link href="/methodology">Methodology</Link>
-            <a href="https://github.com/nuggetrobinhood/linken" target="_blank" rel="noreferrer">GitHub</a>
+            <a href="https://github.com/" target="_blank" rel="noreferrer">GitHub</a>
             <a href="https://x.com" target="_blank" rel="noreferrer">X</a>
           </span>
         </div>
