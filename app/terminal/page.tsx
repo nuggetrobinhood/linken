@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { TerminalHeader } from "@/components/TerminalHeader";
@@ -88,6 +88,12 @@ export default function TerminalPage() {
   );
 }
 
+function pairKey(p: EnrichedPosition) {
+  return `${p.token0Symbol}/${p.token1Symbol}`;
+}
+
+const PAGE = 5;
+
 function Positions({ positions }: { positions: EnrichedPosition[] }) {
   const s = summarize(positions);
   const outOfRange = positions.filter((p) => p.status === "out-of-range").length;
@@ -98,6 +104,49 @@ function Positions({ positions }: { positions: EnrichedPosition[] }) {
       : s.nearExit > 0
       ? `${s.nearExit} position${s.nearExit > 1 ? "s" : ""} near exit (within 2% of a bound).`
       : null;
+
+  const pairs = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of positions) m.set(pairKey(p), (m.get(pairKey(p)) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [positions]);
+
+  const [filter, setFilter] = useState("ALL");
+  const [page, setPage] = useState(0);
+
+  const filtered = useMemo(() => {
+    const list = filter === "ALL" ? positions : positions.filter((p) => pairKey(p) === filter);
+    return [...list].sort((a, b) => (b.valueQuote ?? 0) - (a.valueQuote ?? 0));
+  }, [positions, filter]);
+
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
+  const safePage = Math.min(page, pages - 1);
+  const slice = filtered.slice(safePage * PAGE, safePage * PAGE + PAGE);
+
+  const chip = (id: string, label: string) => {
+    const on = filter === id;
+    return (
+      <button
+        key={id}
+        onClick={() => {
+          setFilter(id);
+          setPage(0);
+        }}
+        style={{
+          fontFamily: "var(--m)",
+          fontSize: 11,
+          padding: "6px 10px",
+          borderRadius: 999,
+          cursor: "pointer",
+          border: on ? "0.5px solid var(--brand)" : "0.5px solid var(--line2)",
+          background: on ? "rgba(62,208,184,0.12)" : "transparent",
+          color: on ? "var(--fg)" : "var(--fg2)",
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
 
   return (
     <div>
@@ -116,16 +165,42 @@ function Positions({ positions }: { positions: EnrichedPosition[] }) {
         <Stat label="Needs attention" value={String(attention)} tone={attention > 0 ? "warn" : undefined} />
       </div>
 
-      <div style={{ fontFamily: "var(--m)", fontSize: 11, color: "var(--fg2)", letterSpacing: 1, marginBottom: 10 }}>
-        ACTIVE POSITIONS ({positions.length})
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        {chip("ALL", `All ${positions.length}`)}
+        {pairs.map(([k, n]) => chip(k, `${k} ${n}`))}
       </div>
-      {positions.map((p) => (
-          <PositionCardLive key={`${p.protocol}-${p.tokenId}`} p={p} />
+
+      <div style={{ fontFamily: "var(--m)", fontSize: 11, color: "var(--fg2)", letterSpacing: 1, marginBottom: 10 }}>
+        ACTIVE POSITIONS ({filtered.length})
+      </div>
+      {slice.map((p) => (
+        <PositionCardLive key={`${p.protocol}-${p.tokenId}`} p={p} />
       ))}
+
+      {pages > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 8 }}>
+          <button
+            disabled={safePage === 0}
+            onClick={() => setPage((x) => Math.max(0, x - 1))}
+            style={{ fontFamily: "var(--m)", fontSize: 12, background: "transparent", border: "0.5px solid var(--line2)", color: "var(--fg2)", borderRadius: 7, padding: "6px 12px", cursor: "pointer", opacity: safePage === 0 ? 0.4 : 1 }}
+          >
+            Prev
+          </button>
+          <span style={{ fontFamily: "var(--m)", fontSize: 12, color: "var(--fg3)" }}>
+            {safePage + 1} / {pages}
+          </span>
+          <button
+            disabled={safePage >= pages - 1}
+            onClick={() => setPage((x) => Math.min(pages - 1, x + 1))}
+            style={{ fontFamily: "var(--m)", fontSize: 12, background: "transparent", border: "0.5px solid var(--line2)", color: "var(--fg2)", borderRadius: 7, padding: "6px 12px", cursor: "pointer", opacity: safePage >= pages - 1 ? 0.4 : 1 }}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" | "warn" }) {
   const color = tone === "pos" ? "var(--pos)" : tone === "neg" ? "var(--neg)" : tone === "warn" ? "var(--warn)" : "var(--fg)";
   return (
