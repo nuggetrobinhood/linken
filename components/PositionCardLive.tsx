@@ -27,7 +27,11 @@ function signed(n: number | null, sym: string): string {
 
 export function PositionCardLive({ p }: { p: EnrichedPosition }) {
   const inRange = p.status === "in-range";
-  const q = p.token1Symbol;
+  const q = ["USDG", "USDC", "USDT"].includes(p.token0Symbol)
+    ? p.token0Symbol
+    : ["USDG", "USDC", "USDT"].includes(p.token1Symbol)
+      ? p.token1Symbol
+      : p.token1Symbol;
   const net = p.netCarryQuote;
   const nearExit =
     inRange &&
