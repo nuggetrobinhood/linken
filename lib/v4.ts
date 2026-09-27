@@ -132,7 +132,7 @@ async function tokenIdsFromBlockscout(owner: Address): Promise<bigint[]> {
     `${BLOCKSCOUT}/api/v2/tokens/${posm}/instances?holder_address_hash=${owner}`;
 
   for (let i = 0; i < 8 && url; i++) {
-    const res: Response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res: Response = await fetch (url);
     if (!res.ok) throw new Error(`blockscout ${res.status}`);
     const json = await res.json();
     const items = (json.items ?? []) as Array<{ id?: string }>;
