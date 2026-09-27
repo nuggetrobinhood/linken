@@ -3,6 +3,7 @@ import { robinhoodChain, RHC_RPC_URL } from "./chain";
 import { UNISWAP_V3, FACTORY_ABI, POOL_ABI } from "./uniswap";
 import { getRawPositions, type RawPosition } from "./parser";
 import { getNetDeposits } from "./history";
+import { readV4Slot0, UNISWAP_V4 } from "./v4";
 import { getGas, getEthUsd } from "./gas";
 
 // SLICE 2 + 3a + 3b: price/range status, live uncollected fees, current position
