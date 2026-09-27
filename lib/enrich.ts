@@ -160,7 +160,7 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
       };
 
       try {
-                let currentTick: number;
+                   let currentTick: number;
         let pool: Address | null = null;
 
         if (isV4) {
