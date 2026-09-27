@@ -76,6 +76,25 @@ function tickToPrice(tick: number, dec0: number, dec1: number): number {
   return Math.pow(1.0001, tick) * Math.pow(10, dec0 - dec1);
 }
 
+const USDG = "0x5fC5360D0400A0Fd4F2af552ADD042d716f1d168".toLowerCase();
+
+function toUsdg(
+  amt0: number,
+  amt1: number,
+  priceT1perT0: number,
+  token0: string,
+  token1: string
+): number | null {
+  const a = token0.toLowerCase();
+  const b = token1.toLowerCase();
+  if (b === USDG) return amt0 * priceT1perT0 + amt1;
+  if (a === USDG) {
+    if (priceT1perT0 === 0) return amt0;
+    return amt0 + amt1 / priceT1perT0;
+  }
+  return null;
+}
+
 function positionAmounts(L: number, tickCur: number, tickLo: number, tickHi: number) {
   const sp = Math.pow(1.0001, tickCur / 2);
   const sa = Math.pow(1.0001, tickLo / 2);
@@ -209,8 +228,18 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
         );
         const amt0Human = a0 / 10 ** p.token0Decimals;
         const amt1Human = a1 / 10 ** p.token1Decimals;
-        const valueQuote = amt0Human * priceCurrent + amt1Human;
-        const feesQuote = fees.fees1Human + fees.fees0Human * priceCurrent;
+                const valueInT1 = amt0Human * priceCurrent + amt1Human;
+        const feesInT1 = fees.fees1Human + fees.fees0Human * priceCurrent;
+        const valueUsdg = toUsdg(amt0Human, amt1Human, priceCurrent, p.token0, p.token1);
+        const feesUsdg = toUsdg(
+          fees.fees0Human,
+          fees.fees1Human,
+          priceCurrent,
+          p.token0,
+          p.token1
+        );
+        const valueQuote = valueUsdg ?? valueInT1;
+        const feesQuote = feesUsdg ?? feesInT1;
 
         let ilQuote: number | null = null;
         let netCarryExGasQuote: number | null = null;
