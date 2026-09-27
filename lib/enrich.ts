@@ -250,7 +250,14 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
           netCarryExGasQuote = round(feesQuote + ilQuote, 4);
           if (gasUsd !== null) netCarryQuote = round(feesQuote + ilQuote - gasUsd, 4);
         }
-
+        let dispNow = priceCurrent;
+        let dispLo = priceLower;
+        let dispHi = priceUpper;
+        if (p.token0.toLowerCase() === USDG && priceCurrent !== 0) {
+          dispNow = 1 / priceCurrent;
+          dispLo = 1 / priceUpper;
+          dispHi = 1 / priceLower;
+        }
         return {
           ...base,
           pool,
@@ -259,9 +266,11 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
             currentTick >= p.tickLower && currentTick < p.tickUpper
               ? "in-range"
               : "out-of-range",
-          priceCurrent: round(priceCurrent, 6),
-          distToUpperPct: round(((priceUpper - priceCurrent) / priceCurrent) * 100, 2),
-          distToLowerPct: round(((priceLower - priceCurrent) / priceCurrent) * 100, 2),
+          priceCurrent: round(dispNow, 6),
+          priceLower: round(dispLo, 6),
+          priceUpper: round(dispHi, 6),
+          distToUpperPct: round(((dispHi - dispNow) / dispNow) * 100, 2),
+          distToLowerPct: round(((dispLo - dispNow) / dispNow) * 100, 2),
           feesQuote: round(feesQuote, 4),
           amt0Human: round(amt0Human, 6),
           amt1Human: round(amt1Human, 6),
