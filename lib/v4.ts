@@ -127,24 +127,21 @@ const TRANSFER = parseAbiItem(
 
 async function tokenIdsFromBlockscout(owner: Address): Promise<bigint[]> {
   const ids = new Set<string>();
+  const posm = UNISWAP_V4.positionManager;
   let url: string | null =
-    `${BLOCKSCOUT}/api/v2/addresses/${owner}/nft?type=ERC-721`;
+    `${BLOCKSCOUT}/api/v2/tokens/${posm}/instances?holder_address_hash=${owner}`;
+
   for (let i = 0; i < 8 && url; i++) {
-        const res: Response = await fetch(url);
+    const res: Response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`blockscout ${res.status}`);
     const json = await res.json();
-    const items = (json.items ?? json) as Array<{
-      token?: { address_hash?: string; address?: string };
-      id?: string;
-    }>;
-    const posm = UNISWAP_V4.positionManager.toLowerCase();
+    const items = (json.items ?? []) as Array<{ id?: string }>;
     for (const it of items) {
-      const addr = (it.token?.address_hash || it.token?.address || "").toLowerCase();
-      if (addr === posm && it.id) ids.add(it.id);
+      if (it.id) ids.add(it.id);
     }
     const next = json.next_page_params;
     url = next
-      ? `${BLOCKSCOUT}/api/v2/addresses/${owner}/nft?type=ERC-721&` +
+      ? `${BLOCKSCOUT}/api/v2/tokens/${posm}/instances?holder_address_hash=${owner}&` +
         new URLSearchParams(next as Record<string, string>).toString()
       : null;
   }
