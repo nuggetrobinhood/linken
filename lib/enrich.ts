@@ -3,7 +3,7 @@ import { robinhoodChain, RHC_RPC_URL } from "./chain";
 import { UNISWAP_V3, FACTORY_ABI, POOL_ABI } from "./uniswap";
 import { getRawPositions, type RawPosition } from "./parser";
 import { getNetDeposits } from "./history";
-import { readV4Slot0, UNISWAP_V4 } from "./v4";
+import { readV4Slot0, readV4Fees, UNISWAP_V4 } from "./v4";
 import { getGas, getEthUsd } from "./gas";
 
 // SLICE 2 + 3a + 3b: price/range status, live uncollected fees, current position
@@ -109,14 +109,28 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
 
             const isV4 = p.protocol === "v4";
 
-      const [fees, deposits] = await Promise.all([
+            const [fees, deposits] = await Promise.all([
         isV4
-          ? Promise.resolve({
-              fees0: "0",
-              fees1: "0",
-              fees0Human: 0,
-              fees1Human: 0,
-            })
+          ? p.poolId
+            ? readV4Fees(
+                p.poolId,
+                p.tokenId,
+                p.tickLower,
+                p.tickUpper,
+                p.token0Decimals,
+                p.token1Decimals
+              ).catch(() => ({
+                fees0: "0",
+                fees1: "0",
+                fees0Human: 0,
+                fees1Human: 0,
+              }))
+            : Promise.resolve({
+                fees0: "0",
+                fees1: "0",
+                fees0Human: 0,
+                fees1Human: 0,
+              })
           : readFees(nfpm, account, p),
         isV4
           ? Promise.resolve({
