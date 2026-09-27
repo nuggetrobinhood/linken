@@ -160,23 +160,31 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
       };
 
       try {
-        const poolAddr = (await client.readContract({
-          address: factory,
-          abi: FACTORY_ABI,
-          functionName: "getPool",
-          args: [p.token0, p.token1, p.fee],
-        })) as string;
+                let currentTick: number;
+        let pool: Address | null = null;
 
-        if (!poolAddr || poolAddr.toLowerCase() === ZERO) return base;
-        const pool = getAddress(poolAddr);
+        if (isV4) {
+          if (!p.poolId) return base;
+          const s = await readV4Slot0(p.poolId);
+          currentTick = s.tick;
+          pool = getAddress(UNISWAP_V4.poolManager);
+        } else {
+          const poolAddr = (await client.readContract({
+            address: factory,
+            abi: FACTORY_ABI,
+            functionName: "getPool",
+            args: [p.token0, p.token1, p.fee],
+          })) as string;
+          if (!poolAddr || poolAddr.toLowerCase() === ZERO) return base;
+          pool = getAddress(poolAddr);
+          const slot0 = (await client.readContract({
+            address: pool,
+            abi: POOL_ABI,
+            functionName: "slot0",
+          })) as readonly unknown[];
+          currentTick = Number(slot0[1]);
+        }
 
-        const slot0 = (await client.readContract({
-          address: pool,
-          abi: POOL_ABI,
-          functionName: "slot0",
-        })) as readonly unknown[];
-
-        const currentTick = Number(slot0[1]);
         const priceCurrent = tickToPrice(currentTick, p.token0Decimals, p.token1Decimals);
 
         const { a0, a1 } = positionAmounts(
