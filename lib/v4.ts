@@ -198,12 +198,7 @@ export async function getRawV4Positions(owner: string): Promise<RawPosition[]> {
   const account = getAddress(owner);
   const posm = getAddress(UNISWAP_V4.positionManager);
 
-  let ids: bigint[] = [];
-    try {
-    ids = await tokenIdsFromBlockscout(account);
-  } catch {
-    ids = [];
-  }
+  const ids = await tokenIdsFromBlockscout(account);
   if (ids.length === 0) return [];
 
   const owned: bigint[] = [];
@@ -220,7 +215,6 @@ export async function getRawV4Positions(owner: string): Promise<RawPosition[]> {
       // burned
     }
   }
-
   const capped = owned.slice(0, MAX_POSITIONS);
   const rows = await Promise.all(
     capped.map(async (id) => {
