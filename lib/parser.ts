@@ -1,18 +1,10 @@
-import { createPublicClient, http, getAddress, type Address } from "viem";
+import { createPublicClient, http, getAddress, type Address, type Hex } from "viem";
 import { robinhoodChain, RHC_RPC_URL } from "./chain";
 import { UNISWAP_V3, NFPM_ABI, ERC20_ABI } from "./uniswap";
+import { getRawV4Positions } from "./v4";
 
-// Server-side RPC client. Reads run on the Next server (via /api/positions), not
-// in the browser — no CORS issues, and it keeps RPC usage on-demand per wallet.
-const client = createPublicClient({
-  chain: robinhoodChain,
-  transport: http(RHC_RPC_URL),
-});
-
-// SLICE 1 output: the raw position fields straight from NonfungiblePositionManager,
-// before any derived math. Verify these against the block explorer for a known
-// wallet before building Slice 2 (pool price / range) on top.
 export interface RawPosition {
+  protocol: "v3" | "v4";
   tokenId: string;
   token0: Address;
   token1: Address;
@@ -20,20 +12,34 @@ export interface RawPosition {
   token1Symbol: string;
   token0Decimals: number;
   token1Decimals: number;
-  fee: number; // 100 / 500 / 3000 / 10000
+  fee: number;
   tickLower: number;
   tickUpper: number;
-  liquidity: string; // uint128 as string
+  liquidity: string;
   tokensOwed0: string;
   tokensOwed1: string;
+  hooks?: Address;
+  tickSpacing?: number;
+  poolId?: Hex;
 }
 
-const MAX_POSITIONS = 50; // bound RPC work per wallet
+const MAX_POSITIONS = 50;
 
-// Slice 1: enumerate a wallet's Uniswap v3 position NFTs and read each position's
-// raw struct + the two tokens' symbols/decimals.
+const client = createPublicClient({
+  chain: robinhoodChain,
+  transport: http(RHC_RPC_URL),
+});
+
 export async function getRawPositions(owner: string): Promise<RawPosition[]> {
-  const account = getAddress(owner); // throws on a malformed address
+  const [v3, v4] = await Promise.all([
+    getRawV3Positions(owner),
+    getRawV4Positions(owner).catch(() => [] as RawPosition[]),
+  ]);
+  return [...v3, ...v4];
+}
+
+export async function getRawV3Positions(owner: string): Promise<RawPosition[]> {
+  const account = getAddress(owner);
   const nfpm = getAddress(UNISWAP_V3.nfpm);
 
   const balance = (await client.readContract({
@@ -46,7 +52,6 @@ export async function getRawPositions(owner: string): Promise<RawPosition[]> {
   const count = Math.min(Number(balance), MAX_POSITIONS);
   if (count === 0) return [];
 
-  // token id for each owned position
   const tokenIds = (await Promise.all(
     Array.from({ length: count }, (_, i) =>
       client.readContract({
@@ -58,7 +63,6 @@ export async function getRawPositions(owner: string): Promise<RawPosition[]> {
     )
   )) as bigint[];
 
-  // read each position struct
   const rawPositions = (await Promise.all(
     tokenIds.map((id) =>
       client.readContract({
@@ -70,7 +74,6 @@ export async function getRawPositions(owner: string): Promise<RawPosition[]> {
     )
   )) as readonly (readonly unknown[])[];
 
-  // collect distinct token addresses and read symbol + decimals once each
   const tokenSet = new Set<string>();
   for (const p of rawPositions) {
     tokenSet.add(getAddress(p[2] as string));
@@ -78,35 +81,31 @@ export async function getRawPositions(owner: string): Promise<RawPosition[]> {
   }
   const meta = await readTokenMeta([...tokenSet] as Address[]);
 
-  return rawPositions.map((p, i) => {
-    const token0 = getAddress(p[2] as string);
-    const token1 = getAddress(p[3] as string);
-    return {
-      tokenId: (tokenIds[i] as bigint).toString(),
-      token0,
-      token1,
-      token0Symbol: meta[token0]?.symbol ?? "?",
-      token1Symbol: meta[token1]?.symbol ?? "?",
-      token0Decimals: meta[token0]?.decimals ?? 18,
-      token1Decimals: meta[token1]?.decimals ?? 18,
-      fee: Number(p[4]),
-      tickLower: Number(p[5]),
-      tickUpper: Number(p[6]),
-      liquidity: (p[7] as bigint).toString(),
-      tokensOwed0: (p[10] as bigint).toString(),
-      tokensOwed1: (p[11] as bigint).toString(),
-    };
-  });
+  return rawPositions
+    .map((p, i) => {
+      const token0 = getAddress(p[2] as string);
+      const token1 = getAddress(p[3] as string);
+      return {
+        protocol: "v3" as const,
+        tokenId: tokenIds[i].toString(),
+        token0,
+        token1,
+        token0Symbol: meta[token0]?.symbol ?? "?",
+        token1Symbol: meta[token1]?.symbol ?? "?",
+        token0Decimals: meta[token0]?.decimals ?? 18,
+        token1Decimals: meta[token1]?.decimals ?? 18,
+        fee: Number(p[4]),
+        tickLower: Number(p[5]),
+        tickUpper: Number(p[6]),
+        liquidity: (p[7] as bigint).toString(),
+        tokensOwed0: (p[10] as bigint).toString(),
+        tokensOwed1: (p[11] as bigint).toString(),
+      };
+    })
+    .filter((p) => p.liquidity !== "0");
 }
 
-interface TokenMeta {
-  symbol: string;
-  decimals: number;
-}
-
-async function readTokenMeta(
-  tokens: Address[]
-): Promise<Record<string, TokenMeta>> {
+async function readTokenMeta(tokens: Address[]) {
   const entries = await Promise.all(
     tokens.map(async (addr) => {
       try {
@@ -120,5 +119,5 @@ async function readTokenMeta(
       }
     })
   );
-  return Object.fromEntries(entries);
+  return Object.fromEntries(entries) as Record<string, { symbol: string; decimals: number }>;
 }
