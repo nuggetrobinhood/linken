@@ -9,7 +9,13 @@ interface RangeBandProps {
   current: number;
   animate?: boolean; // slide the marker in on mount (hero flourish)
 }
-
+function px(n: number) {
+  const a = Math.abs(n);
+  if (!Number.isFinite(n) || a === 0) return "$0.00";
+  if (a >= 1) return usd(n);
+  if (a >= 0.01) return `$${n.toFixed(4)}`;
+  return `$${n.toFixed(8)}`;
+}
 // The concentrated-liquidity range band: lower bound, active zone, current price
 // marker. LINKEN's signature visual.
 export function RangeBand({ lower, upper, current, animate = false }: RangeBandProps) {
@@ -85,9 +91,9 @@ export function RangeBand({ lower, upper, current, animate = false }: RangeBandP
           color: "var(--fg2)",
         }}
       >
-        <span>{usd(lower)} lower</span>
-        <span style={{ color: "var(--fg)" }}>{usd(current)} · now</span>
-        <span>{usd(upper)} upper</span>
+        <span>{px(lower)} lower</span>
+        <span style={{ color: "var(--fg)" }}>{px(current)} · now</span>
+        <span>{px(upper)} upper</span>
       </div>
       <style>{`
         .rb-mark::after{content:"";position:absolute;top:-4px;left:-4px;width:10px;height:10px;border-radius:50%;background:var(--fg);animation:rbp 2s infinite;}
