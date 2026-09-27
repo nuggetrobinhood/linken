@@ -69,7 +69,7 @@ export const POSM_ABI = [
 ] as const;
 
 export const STATE_VIEW_ABI = [
-  {
+    {
     type: "function",
     name: "getSlot0",
     stateMutability: "view",
@@ -79,6 +79,37 @@ export const STATE_VIEW_ABI = [
       { name: "tick", type: "int24" },
       { name: "protocolFee", type: "uint24" },
       { name: "lpFee", type: "uint24" },
+    ],
+  },
+    {
+    type: "function",
+    name: "getPositionInfo",
+    stateMutability: "view",
+    inputs: [
+      { name: "poolId", type: "bytes32" },
+      { name: "owner", type: "address" },
+      { name: "tickLower", type: "int24" },
+      { name: "tickUpper", type: "int24" },
+      { name: "salt", type: "bytes32" },
+    ],
+    outputs: [
+      { name: "liquidity", type: "uint128" },
+      { name: "feeGrowthInside0LastX128", type: "uint256" },
+      { name: "feeGrowthInside1LastX128", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
+    name: "getFeeGrowthInside",
+    stateMutability: "view",
+    inputs: [
+      { name: "poolId", type: "bytes32" },
+      { name: "tickLower", type: "int24" },
+      { name: "tickUpper", type: "int24" },
+    ],
+    outputs: [
+      { name: "feeGrowthInside0X128", type: "uint256" },
+      { name: "feeGrowthInside1X128", type: "uint256" },
     ],
   },
 ] as const;
@@ -298,4 +329,52 @@ export async function readV4Slot0(poolId: Hex) {
     args: [poolId],
   })) as readonly [bigint, number, number, number];
   return { sqrtPriceX96: res[0], tick: Number(res[1]), lpFee: Number(res[3]) };
+}
+
+function tokenIdSalt(tokenId: string): Hex {
+  return `0x${BigInt(tokenId).toString(16).padStart(64, "0")}` as Hex;
+}
+
+function feesOwed(growthNow: bigint, growthLast: bigint, liquidity: bigint): bigint {
+  if (growthNow <= growthLast || liquidity === 0n) return 0n;
+  return ((growthNow - growthLast) * liquidity) / (1n << 128n);
+}
+
+export async function readV4Fees(
+  poolId: Hex,
+  tokenId: string,
+  tickLower: number,
+  tickUpper: number,
+  token0Decimals: number,
+  token1Decimals: number
+) {
+  const view = getAddress(UNISWAP_V4.stateView);
+  const salt = tokenIdSalt(tokenId);
+  const [stored, inside] = await Promise.all([
+    client.readContract({
+      address: view,
+      abi: STATE_VIEW_ABI,
+      functionName: "getPositionInfo",
+      args: [poolId, getAddress(UNISWAP_V4.positionManager), tickLower, tickUpper, salt],
+    }),
+    client.readContract({
+      address: view,
+      abi: STATE_VIEW_ABI,
+      functionName: "getFeeGrowthInside",
+      args: [poolId, tickLower, tickUpper],
+    }),
+  ]);
+  const liquidity = stored[0] as bigint;
+  const last0 = stored[1] as bigint;
+  const last1 = stored[2] as bigint;
+  const now0 = inside[0] as bigint;
+  const now1 = inside[1] as bigint;
+  const a0 = feesOwed(now0, last0, liquidity);
+  const a1 = feesOwed(now1, last1, liquidity);
+  return {
+    fees0: a0.toString(),
+    fees1: a1.toString(),
+    fees0Human: Number(a0) / 10 ** token0Decimals,
+    fees1Human: Number(a1) / 10 ** token1Decimals,
+  };
 }
