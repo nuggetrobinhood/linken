@@ -33,7 +33,7 @@ const client = createPublicClient({
 export async function getRawPositions(owner: string): Promise<RawPosition[]> {
   const [v3, v4] = await Promise.all([
     getRawV3Positions(owner),
-    getRawV4Positions(owner).catch(() => [] as RawPosition[]),
+    getRawV4Positions(owner),
   ]);
   return [...v3, ...v4];
 }
