@@ -45,7 +45,9 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 14px", background: "var(--panel)", borderBottom: "0.5px solid var(--line)", flexWrap: "wrap" }}>
         <div style={{ fontFamily: "var(--m)", fontSize: 14, fontWeight: 600 }}>
           {p.token0Symbol} <span style={{ color: "var(--fg3)" }}>/</span> {p.token1Symbol}
-          <span style={{ color: "var(--fg3)", fontWeight: 400, marginLeft: 8 }}>· v3 · {(p.fee / 10000).toFixed(2)}%</span>
+          <span style={{ color: "var(--fg3)", fontWeight: 400, marginLeft: 8 }}>
+            · {p.protocol} · {p.protocol === "v4" && p.fee === 0x800000 ? "dynamic" : `${(p.fee / 10000).toFixed(2)}%`}
+          </span>
           {rwa && <span style={{ marginLeft: 8, fontSize: 10, color: "var(--warn)", border: "0.5px solid rgba(237,186,70,0.4)", padding: "2px 6px", borderRadius: 5 }}>RWA</span>}
         </div>
         <span style={{ fontFamily: "var(--m)", fontSize: 11, letterSpacing: 1, padding: "3px 9px", borderRadius: 6,
@@ -124,7 +126,7 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
 
       <div style={{ display: "flex", gap: 16, padding: "11px 14px", fontSize: 11.5, flexWrap: "wrap", fontFamily: "var(--m)" }}>
         {p.pool && <a href={`${EXPLORER}/address/${p.pool}`} target="_blank" rel="noreferrer" style={{ color: "var(--fg2)" }}>Pool ↗</a>}
-        <a href={`${EXPLORER}/token/0x73991a25c818bf1f1128deaab1492d45638de0d3/instance/${p.tokenId}`} target="_blank" rel="noreferrer" style={{ color: "var(--fg2)" }}>Position #{p.tokenId} ↗</a>
+        <a href={`${EXPLORER}/token/${p.protocol === "v4" ? "0x58daec3116aae6D93017bAAea7749052E8a04fA7" : "0x73991a25c818bf1f1128deaab1492d45638de0d3"}/instance/${p.tokenId}`} target="_blank" rel="noreferrer" style={{ color: "var(--fg2)" }}>Position #{p.tokenId} ↗</a>
         <a href="https://app.uniswap.org" target="_blank" rel="noreferrer" style={{ color: "var(--fg2)", marginLeft: "auto" }}>Manage ↗</a>
       </div>
     </div>
