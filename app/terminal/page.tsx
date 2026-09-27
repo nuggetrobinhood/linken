@@ -120,7 +120,7 @@ function Positions({ positions }: { positions: EnrichedPosition[] }) {
         ACTIVE POSITIONS ({positions.length})
       </div>
       {positions.map((p) => (
-        <PositionCardLive key={p.tokenId} p={p} />
+          <PositionCardLive key={`${p.protocol}-${p.tokenId}`} p={p} />
       ))}
     </div>
   );
