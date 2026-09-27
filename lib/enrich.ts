@@ -201,7 +201,7 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
         let ilQuote: number | null = null;
         let netCarryExGasQuote: number | null = null;
         let netCarryQuote: number | null = null;
-        if (deposits.ok) {
+        if (deposits.ok && valueQuote > 0) {
           const holdQuote = dep0Human * priceCurrent + dep1Human;
           ilQuote = valueQuote - holdQuote;
           netCarryExGasQuote = round(feesQuote + ilQuote, 4);
