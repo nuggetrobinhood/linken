@@ -21,7 +21,7 @@ export const UNISWAP_V4 = {
 const NATIVE = "0x0000000000000000000000000000000000000000" as Address;
 const MAX_POSITIONS = 50;
 const BLOCKSCOUT = "https://robinhoodchain.blockscout.com";
-const POSM_FROM_BLOCK = 9000n;
+const LOG_LOOKBACK = 400_000n;
 const LOG_SPAN = 200_000n;
 
 export const POSM_ABI = [
@@ -152,7 +152,7 @@ async function tokenIdsFromLogs(owner: Address): Promise<bigint[]> {
   const posm = getAddress(UNISWAP_V4.positionManager);
   const head = await client.getBlockNumber();
   const ids = new Set<bigint>();
-  let from = POSM_FROM_BLOCK;
+  let from = head > LOG_LOOKBACK ? head - LOG_LOOKBACK : 0n;
   while (from <= head) {
     const to = from + LOG_SPAN > head ? head : from + LOG_SPAN;
     try {
@@ -198,7 +198,12 @@ export async function getRawV4Positions(owner: string): Promise<RawPosition[]> {
   const account = getAddress(owner);
   const posm = getAddress(UNISWAP_V4.positionManager);
 
-  const ids = await tokenIdsFromBlockscout(account);
+  let ids: bigint[] = [];
+  try {
+    ids = await tokenIdsFromBlockscout(account);
+  } catch {
+    ids = await tokenIdsFromLogs(account);
+  }
   if (ids.length === 0) return [];
 
   const owned: bigint[] = [];
