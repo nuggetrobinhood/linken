@@ -202,10 +202,10 @@ export async function getRawV4Positions(owner: string): Promise<RawPosition[]> {
   const posm = getAddress(UNISWAP_V4.positionManager);
 
   let ids: bigint[] = [];
-  try {
+    try {
     ids = await tokenIdsFromBlockscout(account);
   } catch {
-    ids = await tokenIdsFromLogs(account);
+    ids = [];
   }
   if (ids.length === 0) return [];
 
