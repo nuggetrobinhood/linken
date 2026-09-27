@@ -107,9 +107,25 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
       const priceLower = tickToPrice(p.tickLower, p.token0Decimals, p.token1Decimals);
       const priceUpper = tickToPrice(p.tickUpper, p.token0Decimals, p.token1Decimals);
 
+            const isV4 = p.protocol === "v4";
+
       const [fees, deposits] = await Promise.all([
-        readFees(nfpm, account, p),
-        getNetDeposits(p.tokenId),
+        isV4
+          ? Promise.resolve({
+              fees0: "0",
+              fees1: "0",
+              fees0Human: 0,
+              fees1Human: 0,
+            })
+          : readFees(nfpm, account, p),
+        isV4
+          ? Promise.resolve({
+              dep0: 0n,
+              dep1: 0n,
+              txHashes: [] as string[],
+              ok: false,
+            })
+          : getNetDeposits(p.tokenId),
       ]);
       const gas = await getGas(deposits.txHashes);
       const gasUsd = ethUsd === null ? null : round(gas.gasEth * ethUsd, 4);
