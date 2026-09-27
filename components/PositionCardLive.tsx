@@ -96,7 +96,7 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
             </div>
           ) : (
             <div style={{ fontSize: 12.5, color: "var(--warn)" }}>
-              {p.priceCurrent >= p.priceUpper
+                {p.currentTick !== null && p.currentTick >= p.tickUpper
                 ? `⚠ Above range — position is 100% ${p.token1Symbol}, earning no fees`
                 : `⚠ Below range — position is 100% ${p.token0Symbol}, earning no fees`}
             </div>
