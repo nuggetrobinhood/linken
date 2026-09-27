@@ -130,7 +130,7 @@ async function tokenIdsFromBlockscout(owner: Address): Promise<bigint[]> {
   let url: string | null =
     `${BLOCKSCOUT}/api/v2/addresses/${owner}/nft?type=ERC-721`;
   for (let i = 0; i < 8 && url; i++) {
-    const res = await fetch(url, { next: { revalidate: 0 } });
+        const res: Response = await fetch(url);
     if (!res.ok) throw new Error(`blockscout ${res.status}`);
     const json = await res.json();
     const items = (json.items ?? json) as Array<{
