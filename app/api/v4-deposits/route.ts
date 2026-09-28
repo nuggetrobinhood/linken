@@ -18,5 +18,7 @@ export async function GET(req: NextRequest) {
     dep1: d.dep1.toString(),
     txCount: d.txHashes.length,
     txHashes: d.txHashes,
+    matched: d.matched,
+    pmLogs: d.pmLogs,
   });
 }
