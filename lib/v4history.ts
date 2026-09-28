@@ -165,6 +165,7 @@ export async function getNetDepositsV4(
       ok: true,
       matched,
       pmLogs,
+      debug,
     };
   } catch {
     return { dep0: 0n, dep1: 0n, txHashes: [], ok: false, matched: 0, pmLogs: 0, debug: null };
