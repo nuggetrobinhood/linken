@@ -104,7 +104,7 @@ export async function getNetDepositsV4(
           });
           if (
             parsed.eventName === "ModifyLiquidity" &&
-            String(parsed.args.salt).toLowerCase() === salt.toLowerCase()
+            BigInt(parsed.args.salt as string) === id
           ) {
             mine.push({
               id: parsed.args.id as Hex,
