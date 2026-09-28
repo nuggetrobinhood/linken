@@ -3,6 +3,7 @@ import { robinhoodChain, RHC_RPC_URL } from "./chain";
 import { UNISWAP_V3, FACTORY_ABI, POOL_ABI } from "./uniswap";
 import { getRawPositions, type RawPosition } from "./parser";
 import { getNetDeposits } from "./history";
+import { getNetDepositsV4 } from "./v4history";
 import { readV4Slot0, readV4Fees, UNISWAP_V4 } from "./v4";
 import { getGas, getEthUsd } from "./gas";
 
@@ -151,13 +152,13 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
                 fees1Human: 0,
               })
           : readFees(nfpm, account, p),
-        isV4
-          ? Promise.resolve({
+          isV4
+          ? getNetDepositsV4(p.tokenId, p.tickLower, p.tickUpper).catch(() => ({
               dep0: 0n,
               dep1: 0n,
               txHashes: [] as string[],
               ok: false,
-            })
+            }))
           : getNetDeposits(p.tokenId),
       ]);
       const gas = await getGas(deposits.txHashes);
@@ -245,7 +246,9 @@ export async function getEnrichedPositions(owner: string): Promise<EnrichedPosit
         let netCarryExGasQuote: number | null = null;
         let netCarryQuote: number | null = null;
         if (deposits.ok && valueQuote > 0) {
-          const holdQuote = dep0Human * priceCurrent + dep1Human;
+          const holdQuote =
+            toUsdg(dep0Human, dep1Human, priceCurrent, p.token0, p.token1) ??
+            dep0Human * priceCurrent + dep1Human;
           ilQuote = valueQuote - holdQuote;
           netCarryExGasQuote = round(feesQuote + ilQuote, 4);
           if (gasUsd !== null) netCarryQuote = round(feesQuote + ilQuote - gasUsd, 4);
