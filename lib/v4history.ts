@@ -99,7 +99,7 @@ export async function getNetDepositsV4(
       toBlock: head,
     });
     if (transfers.length === 0) {
-      return { dep0: 0n, dep1: 0n, txHashes: [], ok: false, matched: 0, pmLogs: 0 };
+        return { dep0: 0n, dep1: 0n, txHashes: [], ok: false, matched: 0, pmLogs: 0, debug: null };
     }
 
     const hashes = [...new Set(transfers.map((l) => l.transactionHash))];
@@ -167,6 +167,6 @@ export async function getNetDepositsV4(
       pmLogs,
     };
   } catch {
-    return { dep0: 0n, dep1: 0n, txHashes: [], ok: false, matched: 0, pmLogs: 0 };
+    return { dep0: 0n, dep1: 0n, txHashes: [], ok: false, matched: 0, pmLogs: 0, debug: null };
   }
 }
