@@ -68,12 +68,14 @@ export async function getNetDepositsV4(
   const salt = saltOf(tokenId);
 
   try {
+    const head = await client.getBlockNumber();
+    const from = head > 2_000_000n ? head - 2_000_000n : 0n;
     const transfers = await client.getLogs({
       address: posm,
       event: TRANSFER,
       args: { tokenId: id },
-      fromBlock: 0n,
-      toBlock: "latest",
+      fromBlock: from,
+      toBlock: head,
     });
     if (transfers.length === 0) {
       return { dep0: 0n, dep1: 0n, txHashes: [], ok: false };
