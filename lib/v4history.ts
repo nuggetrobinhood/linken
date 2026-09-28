@@ -36,10 +36,14 @@ const SLOT0_ABI = [
   },
 ] as const;
 
+function sqrtP(tick: number) {
+  return Math.exp((tick * Math.log(1.0001)) / 2);
+}
+
 function amountsAtTick(L: number, tickCur: number, tickLo: number, tickHi: number) {
-  const sp = Math.pow(1.0001, tickCur / 2);
-  const sa = Math.pow(1.0001, tickLo / 2);
-  const sb = Math.pow(1.0001, tickHi / 2);
+  const sp = sqrtP(tickCur);
+  const sa = sqrtP(tickLo);
+  const sb = sqrtP(tickHi);
   let a0 = 0;
   let a1 = 0;
   if (tickCur < tickLo) a0 = L * (1 / sa - 1 / sb);
@@ -49,6 +53,13 @@ function amountsAtTick(L: number, tickCur: number, tickLo: number, tickHi: numbe
     a1 = L * (sp - sa);
   }
   return { a0, a1 };
+}
+
+function toRaw(x: number): bigint {
+  if (!Number.isFinite(x) || x <= 0) return 0n;
+  const s = x.toFixed(0);
+  if (!/^\d+$/.test(s)) return 0n;
+  return BigInt(s);
 }
 
 function readWord(data: Hex, index: number): bigint {
@@ -128,7 +139,7 @@ export async function getNetDepositsV4(
         })) as readonly unknown[];
         tick = Number(slot[1]);
       } catch {
-        /* fallback */
+        tick = tickLower;
       }
 
       for (const m of mine) {
@@ -139,8 +150,8 @@ export async function getNetDepositsV4(
     }
 
     return {
-      dep0: BigInt(Math.max(0, Math.round(dep0))),
-      dep1: BigInt(Math.max(0, Math.round(dep1))),
+      dep0: toRaw(dep0),
+      dep1: toRaw(dep1),
       txHashes: hashes,
       ok: true,
       matched,
