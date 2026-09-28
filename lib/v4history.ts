@@ -3,6 +3,7 @@ import {
   http,
   getAddress,
   parseAbiItem,
+  decodeEventLog,
   type Hex,
 } from "viem";
 import { robinhoodChain, RHC_RPC_URL } from "./chain";
@@ -17,6 +18,7 @@ const client = createPublicClient({
 const TRANSFER = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
 );
+
 const MODIFY = parseAbiItem(
   "event ModifyLiquidity(bytes32 indexed id, address indexed sender, int24 tickLower, int24 tickUpper, int256 liquidityDelta, bytes32 salt)"
 );
@@ -83,17 +85,36 @@ export async function getNetDepositsV4(
 
     for (const hash of hashes) {
       const receipt = await client.getTransactionReceipt({ hash });
-      const logs = await client.getLogs({
-        address: pm,
-        event: MODIFY,
-        fromBlock: receipt.blockNumber,
-        toBlock: receipt.blockNumber,
-      });
-      const mine = logs.filter(
-        (l) =>
-          l.transactionHash === hash &&
-          String(l.args.salt).toLowerCase() === salt.toLowerCase()
-      );
+      const mine: Array<{
+        id: Hex;
+        tickLower: number;
+        tickUpper: number;
+        liquidityDelta: bigint;
+      }> = [];
+
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() !== pm.toLowerCase()) continue;
+        try {
+          const parsed = decodeEventLog({
+            abi: [MODIFY],
+            data: log.data,
+            topics: log.topics,
+          });
+          if (
+            parsed.eventName === "ModifyLiquidity" &&
+            String(parsed.args.salt).toLowerCase() === salt.toLowerCase()
+          ) {
+            mine.push({
+              id: parsed.args.id as Hex,
+              tickLower: Number(parsed.args.tickLower),
+              tickUpper: Number(parsed.args.tickUpper),
+              liquidityDelta: parsed.args.liquidityDelta as bigint,
+            });
+          }
+        } catch {
+          /* skip */
+        }
+      }
       if (mine.length === 0) continue;
 
       let tick = tickLower;
@@ -102,17 +123,17 @@ export async function getNetDepositsV4(
           address: getAddress(UNISWAP_V4.stateView),
           abi: SLOT0_ABI,
           functionName: "getSlot0",
-          args: [mine[0].args.id as Hex],
+          args: [mine[0].id],
           blockNumber: receipt.blockNumber,
         })) as readonly unknown[];
         tick = Number(slot[1]);
       } catch {
-        /* current-range fallback */
+        /* fallback */
       }
 
-      for (const l of mine) {
-        const dL = Number(l.args.liquidityDelta ?? 0n);
-        const { a0, a1 } = amountsAtTick(dL, tick, tickLower, tickUpper);
+      for (const args of mine) {
+        const dL = Number(args.liquidityDelta);
+        const { a0, a1 } = amountsAtTick(dL, tick, args.tickLower, args.tickUpper);
         dep0 += a0;
         dep1 += a1;
       }
