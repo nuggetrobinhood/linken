@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { EnrichedPosition } from "@/lib/enrich";
 import { pct } from "@/lib/format";
 import { usEquitiesState } from "@/lib/market";
