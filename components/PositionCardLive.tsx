@@ -25,6 +25,67 @@ function signed(n: number | null, sym: string): string {
   return (n > 0 ? "+" : "") + quote(n, sym);
 }
 
+function LoadV4Carry({ p }: { p: EnrichedPosition }) {
+  const [state, setState] = useState<"idle" | "load" | "err">("idle");
+  const [text, setText] = useState<string | null>(null);
+
+  const run = async () => {
+    setState("load");
+    try {
+      const u = `/api/v4-deposits?tokenId=${p.tokenId}&tickLower=${p.tickLower}&tickUpper=${p.tickUpper}`;
+      const r = await fetch(u);
+      const j = await r.json();
+      if (!j.ok) throw new Error("fail");
+      const dep0 = Number(j.dep0) / 10 ** p.token0Decimals;
+      const dep1 = Number(j.dep1) / 10 ** p.token1Decimals;
+      const value = p.valueQuote ?? 0;
+      const fees = p.feesQuote ?? 0;
+      const hold =
+        p.token0Symbol === "USDG"
+          ? dep0 + (p.priceCurrent && p.priceCurrent !== 0 ? dep1 * p.priceCurrent : 0)
+          : dep0 / (p.priceCurrent || 1) + dep1;
+      const il = value - hold;
+      const net = fees + il;
+      setText(
+        `Deposited ~$${hold.toFixed(2)} · IL ${il.toFixed(2)} · net carry ${net.toFixed(2)}`
+      );
+      setState("idle");
+    } catch {
+      setState("err");
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 10, fontSize: 11, color: "var(--warn)" }}>
+      {text ? (
+        <span style={{ color: "var(--fg2)" }}>{text}</span>
+      ) : (
+        <>
+          History not loaded.
+          <button
+            onClick={run}
+            disabled={state === "load"}
+            style={{
+              marginLeft: 8,
+              fontFamily: "var(--m)",
+              fontSize: 11,
+              background: "transparent",
+              border: "0.5px solid var(--line2)",
+              color: "var(--fg2)",
+              borderRadius: 7,
+              padding: "4px 8px",
+              cursor: "pointer",
+            }}
+          >
+            {state === "load" ? "Loading…" : "Load net carry"}
+          </button>
+          {state === "err" ? " RPC busy — wait and retry." : null}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function PositionCardLive({ p }: { p: EnrichedPosition }) {
   const inRange = p.status === "in-range";
   const q = ["USDG", "USDC", "USDT"].includes(p.token0Symbol)
@@ -75,7 +136,10 @@ export function PositionCardLive({ p }: { p: EnrichedPosition }) {
           <Row k="Impermanent loss" v={signed(p.ilQuote, q)} tone="neg" />
           <Row k="Position value" v={quote(p.valueQuote, q)} />
         </div>
-        {!p.historyOk && (
+                {!p.historyOk && p.protocol === "v4" && (
+          <LoadV4Carry p={p} />
+        )}
+        {!p.historyOk && p.protocol !== "v4" && (
           <div style={{ marginTop: 10, fontSize: 11, color: "var(--warn)" }}>
             History unavailable — IL and net carry can&apos;t be computed for this position yet.
           </div>
