@@ -83,7 +83,7 @@ export async function getNetDepositsV4(
   tokenId: string,
   tickLower: number,
   tickUpper: number
-): Promise<Deposits & { matched: number; pmLogs: number }> {
+): Promise<Deposits & { matched: number; pmLogs: number; debug: unknown }> {
   const posm = getAddress(UNISWAP_V4.positionManager);
   const pm = getAddress(UNISWAP_V4.poolManager);
   const id = BigInt(tokenId);
@@ -107,6 +107,7 @@ export async function getNetDepositsV4(
     let dep1 = 0;
     let matched = 0;
     let pmLogs = 0;
+    let debug: unknown = null;
 
     for (const hash of hashes) {
       const receipt = await client.getTransactionReceipt({ hash });
@@ -125,6 +126,14 @@ export async function getNetDepositsV4(
         const poolId = (log.topics[1] ?? "0x") as Hex;
         mine.push({ poolId, dL, lo: tickLo, hi: tickHi });
         matched += 1;
+        debug = {
+          dL,
+          lo: tickLo,
+          hi: tickHi,
+          salt: salt.toString(),
+          dataLen: data.length,
+        };
+
       }
       if (mine.length === 0) continue;
 
