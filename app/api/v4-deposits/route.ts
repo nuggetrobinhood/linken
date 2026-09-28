@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "tokenId,tickLower,tickUpper required" }, { status: 400 });
   }
   const d = await getNetDepositsV4(tokenId, tickLower, tickUpper);
-  return NextResponse.json({
+    return NextResponse.json({
     tokenId,
     ok: d.ok,
     dep0: d.dep0.toString(),
@@ -20,5 +20,6 @@ export async function GET(req: NextRequest) {
     txHashes: d.txHashes,
     matched: d.matched,
     pmLogs: d.pmLogs,
+    debug: d.debug,
   });
 }
